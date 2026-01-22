@@ -3,8 +3,8 @@ package sekundarna_cast;
 import java.util.*;
 
 public class OsmData {
-    private Map<Long, OsmNode> nodes = new HashMap<>();
-    private List<Building> buildings = new ArrayList<>();
+    private final Map<Long, OsmNode> nodes = new HashMap<>();
+    private final List<Building> buildings = new ArrayList<>();
     private Bounds bounds;
 
     public void addNode(OsmNode node) { nodes.put(node.getId(), node); }

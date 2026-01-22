@@ -6,7 +6,7 @@ public class OsmNode {
     private long id;
     private double lat;
     private double lon;
-    private Map<String, String> tags = new HashMap<>();
+    private final Map<String, String> tags = new HashMap<>();
 
     public long getId() { return id; }
     public void setId(long id) { this.id = id; }

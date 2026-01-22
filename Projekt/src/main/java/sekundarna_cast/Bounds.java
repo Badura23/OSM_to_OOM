@@ -1,10 +1,10 @@
 package sekundarna_cast;
 
 public class Bounds {
-    private double minLat;
-    private double minLon;
-    private double maxLat;
-    private double maxLon;
+    private final double minLat;
+    private final double minLon;
+    private final double maxLat;
+    private final double maxLon;
 
     public Bounds(double minLat, double minLon, double maxLat, double maxLon) {
         this.minLat = minLat;
