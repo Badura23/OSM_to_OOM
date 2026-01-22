@@ -1,4 +1,4 @@
-package sekundarne_triedy;
+package sekundarna_cast;
 
 import java.util.*;
 
@@ -18,5 +18,4 @@ public class OsmNode {
     public void setLon(double lon) { this.lon = lon; }
 
     public void addTag(String k, String v) { tags.put(k, v); }
-    public Map<String, String> getTags() { return tags; }
 }

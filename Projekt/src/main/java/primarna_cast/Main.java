@@ -1,7 +1,7 @@
 package primarna_cast;
 
-import sekundarne_triedy.Building;
-import sekundarne_triedy.OsmData;
+import sekundarna_cast.Building;
+import sekundarna_cast.OsmData;
 import java.util.List;
 
 public class Main {

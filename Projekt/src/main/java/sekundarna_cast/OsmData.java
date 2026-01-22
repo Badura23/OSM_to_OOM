@@ -1,4 +1,4 @@
-package sekundarne_triedy;
+package sekundarna_cast;
 
 import java.util.*;
 

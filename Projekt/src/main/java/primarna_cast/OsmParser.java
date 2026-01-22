@@ -1,9 +1,9 @@
 package primarna_cast;
 
 import org.w3c.dom.*;
-import sekundarne_triedy.Building;
-import sekundarne_triedy.OsmData;
-import sekundarne_triedy.OsmNode;
+import sekundarna_cast.Building;
+import sekundarna_cast.OsmData;
+import sekundarna_cast.OsmNode;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -98,7 +98,7 @@ public class OsmParser {
                 building.addNode(node);
             }
         }
-
+        // Bezpecnostna kontrola
         if (building.getNodes().size() >= 3) {
             data.addBuilding(building);
         }

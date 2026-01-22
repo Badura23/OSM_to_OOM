@@ -1,10 +1,10 @@
 package primarna_cast;
 
 import org.w3c.dom.*;
-import sekundarne_triedy.Building;
-import sekundarne_triedy.OsmData;
-import sekundarne_triedy.OsmNode;
-import sekundarne_triedy.Bounds;
+import sekundarna_cast.Building;
+import sekundarna_cast.OsmData;
+import sekundarna_cast.OsmNode;
+import sekundarna_cast.Bounds;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -42,15 +42,12 @@ public class OSMExporter {
         int newNodeId = 1;
         int newWayId = 1;
 
-        // Pre kazdu budovu
         for (Building building : buildings) {
             List<OsmNode> nodes = building.getNodes();
 
-            // Pridat vsetky uzly tejto budovy
             for (OsmNode node : nodes) {
                 long oldId = node.getId();
 
-                // Ak sme tento uzol este nepridali
                 if (!idMapping.containsKey(oldId)) {
                     addNode(doc, osm, node, newNodeId);
                     idMapping.put(oldId, newNodeId);
@@ -59,7 +56,7 @@ public class OSMExporter {
             }
         }
 
-        // Pridat vsetky ways (budovy)
+        // Pridanie vsetkych ways (budovy)
         for (Building building : buildings) {
             addWay(doc, osm, building, idMapping, newWayId);
             newWayId++;
@@ -88,7 +85,7 @@ public class OSMExporter {
         way.setAttribute("visible", "true");
         way.setAttribute("version", "1");
 
-        // Pridat referencie na uzly
+        // Pridanie referencie na uzly
         List<OsmNode> nodes = building.getNodes();
         for (OsmNode node : nodes) {
             int newNodeId = idMapping.get(node.getId());
@@ -97,7 +94,7 @@ public class OSMExporter {
             way.appendChild(nd);
         }
 
-        // Pridať vsetky tagy budovy
+        // Pridanie vsetky tagy budovy
         for (Map.Entry<String, String> entry : building.getTags().entrySet()) {
             Element tag = doc.createElement("tag");
             tag.setAttribute("k", entry.getKey());

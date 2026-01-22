@@ -1,4 +1,4 @@
-package sekundarne_triedy;
+package sekundarna_cast;
 
 public class Bounds {
     private double minLat;
