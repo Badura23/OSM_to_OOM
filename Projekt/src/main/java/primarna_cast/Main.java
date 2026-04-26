@@ -6,7 +6,7 @@ import sekundarna_cast.OsmData;
 import java.util.List;
 
 public class Main {
-    public static void main(String[] args) {
+    static void main() {
         try {
             OsmData osmData = OsmParser.parse("map.osm");
             List<Building> buildings = osmData.getBuildings();
