@@ -19,7 +19,7 @@ public final class CoordinateConverter {
     private final int referenceX;
     private final int referenceY;
 
-    private CoordinateConverter(double minLat, double minLon, double maxLat, double maxLon) {
+    private CoordinateConverter(double minLat, double minLon, double maxLat) {
         this.referenceLat = maxLat;
         this.referenceLon = minLon;
         this.projectionLatitude = (minLat + maxLat) / 2.0;
@@ -34,30 +34,27 @@ public final class CoordinateConverter {
             return new CoordinateConverter(
                     bounds.getMinLat(),
                     bounds.getMinLon(),
-                    bounds.getMaxLat(),
-                    bounds.getMaxLon()
+                    bounds.getMaxLat()
             );
         }
 
         double minLat = Double.POSITIVE_INFINITY;
         double minLon = Double.POSITIVE_INFINITY;
         double maxLat = Double.NEGATIVE_INFINITY;
-        double maxLon = Double.NEGATIVE_INFINITY;
 
         for (Building building : osmData.getBuildings()) {
             for (OsmNode node : building.getNodes()) {
                 minLat = Math.min(minLat, node.getLat());
                 minLon = Math.min(minLon, node.getLon());
                 maxLat = Math.max(maxLat, node.getLat());
-                maxLon = Math.max(maxLon, node.getLon());
             }
         }
 
         if (!Double.isFinite(minLat)) {
-            return new CoordinateConverter(0.0, 0.0, 0.0, 0.0);
+            return new CoordinateConverter(0.0, 0.0, 0.0);
         }
 
-        return new CoordinateConverter(minLat, minLon, maxLat, maxLon);
+        return new CoordinateConverter(minLat, minLon, maxLat);
     }
 
     public MapPoint convert(OsmNode node) {
