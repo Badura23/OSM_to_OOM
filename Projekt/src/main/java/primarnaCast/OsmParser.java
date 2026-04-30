@@ -1,9 +1,9 @@
-package primarna_cast;
+package primarnaCast;
 
 import org.w3c.dom.*;
-import sekundarna_cast.Building;
-import sekundarna_cast.OsmData;
-import sekundarna_cast.OsmNode;
+import sekundarnaCast.Building;
+import sekundarnaCast.OsmData;
+import sekundarnaCast.OsmNode;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;

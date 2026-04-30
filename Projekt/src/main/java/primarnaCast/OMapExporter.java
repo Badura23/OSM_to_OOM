@@ -1,12 +1,12 @@
-package primarna_cast;
+package primarnaCast;
 
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
-import sekundarna_cast.Building;
-import sekundarna_cast.OsmData;
-import sekundarna_cast.OsmNode;
+import sekundarnaCast.Building;
+import sekundarnaCast.OsmData;
+import sekundarnaCast.OsmNode;
 
 import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilder;
@@ -20,31 +20,41 @@ import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.Locale;
 
 public final class OMapExporter {
     private static final String MAP_NAMESPACE = "http://openorienteering.org/apps/mapper/xml/v2";
+
+    // ID symbolu budovy v referencnom .omap subore.
+    // Tento symbol musi existovat v subore "complete map.omap".
     private static final String BUILDING_SYMBOL_ID = "111";
-    private static final String REFERENCE_TEMPLATE_PROPERTY = "oom.referenceTemplate";
 
     private OMapExporter() {
     }
 
+    // Hlavna metoda exportu.
+    // Zoberie uz vyparsovane OSM data, vyberie z nich budovy a vytvori .omap subor.
     public static void exportOnlyBuildings(OsmData osmData, String filename) throws Exception {
         List<Building> buildings = osmData.getBuildings();
         CoordinateConverter coordinateConverter = CoordinateConverter.from(osmData);
+
+        // Referencny .omap subor obsahuje platne farby, symboly a strukturu OOM.
+        // Z neho skopirujeme hlavne colors a symbols.
         Document referenceDocument = loadReferenceDocument();
 
+        // Vytvorime novy prazdny XML dokument, do ktoreho budeme skladat vystupny .omap.
         DocumentBuilderFactory factory = createDocumentBuilderFactory();
         DocumentBuilder builder = factory.newDocumentBuilder();
         Document document = builder.newDocument();
 
+        // Korenovy element celeho .omap suboru.
         Element map = document.createElementNS(MAP_NAMESPACE, "map");
         map.setAttribute("version", "9");
         document.appendChild(map);
 
-        appendEmptyNotes(document, map);
-        appendGeoreferencing(document, map, coordinateConverter);
+        // Zakladne casti .omap suboru.
+        appendGeoreferencing(document, map);
+
+        // Farby kopirujeme z referencnej mapy, aby sme nemuseli rucne vytvarat vsetky definicie.
         importReferenceElement(referenceDocument, document, map, "colors");
 
         Element barrier = appendReferenceBarrier(referenceDocument, document, map);
@@ -54,8 +64,9 @@ public final class OMapExporter {
         saveToFile(document, filename);
     }
 
+    // Nacita referencny .omap subor, z ktoreho kopirujeme colors, symbols a barrier atributy.
     private static Document loadReferenceDocument() throws Exception {
-        Path referencePath = resolveReferenceTemplate();
+        Path referencePath = Path.of("complete map.omap");
         if (!Files.exists(referencePath)) {
             throw new IllegalStateException("Reference OMAP template not found: " + referencePath);
         }
@@ -65,6 +76,7 @@ public final class OMapExporter {
         return builder.parse(referencePath.toFile());
     }
 
+    // Vytvori XML parser.
     private static DocumentBuilderFactory createDocumentBuilderFactory() throws Exception {
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
         factory.setNamespaceAware(true);
@@ -72,44 +84,9 @@ public final class OMapExporter {
         return factory;
     }
 
-    private static Path resolveReferenceTemplate() {
-        String override = System.getProperty(REFERENCE_TEMPLATE_PROPERTY);
-        if (override != null && !override.isBlank()) {
-            return Path.of(override);
-        }
-
-        Path userProfileTemplate = resolveUserProfileTemplate();
-        if (userProfileTemplate != null && Files.exists(userProfileTemplate)) {
-            return userProfileTemplate;
-        }
-
-        Path userHomeTemplate = Path.of(System.getProperty("user.home"), "Downloads", "complete map.omap");
-        if (Files.exists(userHomeTemplate)) {
-            return userHomeTemplate;
-        }
-
-        Path localTemplate = Path.of("complete map.omap");
-        if (Files.exists(localTemplate)) {
-            return localTemplate;
-        }
-
-        return userProfileTemplate != null ? userProfileTemplate : userHomeTemplate;
-    }
-
-    private static Path resolveUserProfileTemplate() {
-        String userProfile = System.getenv("USERPROFILE");
-        if (userProfile == null || userProfile.isBlank()) {
-            return null;
-        }
-        return Path.of(userProfile, "Downloads", "complete map.omap");
-    }
-
-    private static void appendEmptyNotes(Document document, Element parent) {
-        appendElement(document, parent, "notes");
-    }
-
-    private static void appendGeoreferencing(Document document, Element parent,
-                                             CoordinateConverter coordinateConverter) {
+    // Prida zakladne georeferencne informacie mapy.
+    // V tomto projekte pouzivame hlavne lokalne x/y suradnice objektov.
+    private static void appendGeoreferencing(Document document, Element parent) {
         Element georeferencing = appendElement(document, parent, "georeferencing");
         georeferencing.setAttribute("scale", "4000");
         georeferencing.setAttribute("auxiliary_scale_factor", "1");
@@ -117,35 +94,13 @@ public final class OMapExporter {
         georeferencing.setAttribute("grivation", "0");
 
         Element refPoint = appendElement(document, georeferencing, "ref_point");
-        refPoint.setAttribute("x", String.valueOf(coordinateConverter.getReferenceX()));
-        refPoint.setAttribute("y", String.valueOf(coordinateConverter.getReferenceY()));
-
-        Element projectedCrs = appendElement(document, georeferencing, "projected_crs");
-        projectedCrs.setAttribute("id", "Local");
-
-        Element projectedSpec = appendElement(document, projectedCrs, "spec");
-        projectedSpec.setAttribute("language", "PROJ.4");
-        projectedSpec.setTextContent(coordinateConverter.getProjectedCrsSpec());
-
-        Element projectedParameter = appendElement(document, projectedCrs, "parameter");
-        projectedParameter.setTextContent("Local equirectangular");
-
-        Element projectedRefPoint = appendElement(document, projectedCrs, "ref_point");
-        projectedRefPoint.setAttribute("x", "0");
-        projectedRefPoint.setAttribute("y", "0");
-
-        Element geographicCrs = appendElement(document, georeferencing, "geographic_crs");
-        geographicCrs.setAttribute("id", "Geographic coordinates");
-
-        Element geographicSpec = appendElement(document, geographicCrs, "spec");
-        geographicSpec.setAttribute("language", "PROJ.4");
-        geographicSpec.setTextContent("+proj=latlong +datum=WGS84");
-
-        Element geographicRefPoint = appendElement(document, geographicCrs, "ref_point_deg");
-        geographicRefPoint.setAttribute("lat", formatDouble(coordinateConverter.getReferenceLat()));
-        geographicRefPoint.setAttribute("lon", formatDouble(coordinateConverter.getReferenceLon()));
+        refPoint.setAttribute("x", "0");
+        refPoint.setAttribute("y", "0");
     }
 
+    // Vytvori element barrier pre vystupny .omap.
+    // Ak existuje v referencnej mape, skopiruje jeho atributy,
+    // aby bol vystup co najviac kompatibilny so strukturou vytvorenou v OOM.
     private static Element appendReferenceBarrier(Document referenceDocument, Document targetDocument, Element parent) {
         Element referenceBarrier = findFirstElement(referenceDocument, "barrier");
         Element barrier = appendElement(targetDocument, parent, "barrier");
@@ -160,6 +115,9 @@ public final class OMapExporter {
         return barrier;
     }
 
+    // Skopiruje celu sekciu z referencneho .omap suboru do vystupu.
+    // Pouziva sa pre colors a symbols, pretoze ich rucne vytvaranie
+    //by bolo zbytocne zlozite a nachylne na chyby.
     private static void importReferenceElement(Document referenceDocument, Document targetDocument,
                                                Element parent, String localName) {
         Element referenceElement = findFirstElement(referenceDocument, localName);
@@ -171,6 +129,8 @@ public final class OMapExporter {
         parent.appendChild(importedNode);
     }
 
+    // Najde prvy element podla mena v OOM namespace.
+    // Pouzivame to pri hladani colors, symbols a barrier v referencnom subore.
     private static Element findFirstElement(Document document, String localName) {
         NodeList nodeList = document.getElementsByTagNameNS(MAP_NAMESPACE, localName);
         if (nodeList.getLength() == 0) {
@@ -179,6 +139,9 @@ public final class OMapExporter {
         return (Element) nodeList.item(0);
     }
 
+    // Skopiruje atributy z referencneho elementu.
+    // Pouziva sa hlavne pri barrier, aby sme zachovali jeho verziu
+    // a kompatibilitne nastavenia.
     private static void copyAttributes(Element source, Element target) {
         for (int i = 0; i < source.getAttributes().getLength(); i++) {
             Node attribute = source.getAttributes().item(i);
@@ -227,6 +190,8 @@ public final class OMapExporter {
         for (int i = 0; i < nodes.size(); i++) {
             CoordinateConverter.MapPoint point = coordinateConverter.convert(nodes.get(i));
             int flag = (i == nodes.size() - 1) ? 50 : 32;
+            // Flag 32 oznacuje bezny bod.
+            // Flag 50 pouzivame pre posledny bod uzavreteho polygonu.
             builder.append(point.getX())
                     .append(' ')
                     .append(point.getY())
@@ -242,11 +207,6 @@ public final class OMapExporter {
         parent.appendChild(element);
         return element;
     }
-
-    private static String formatDouble(double value) {
-        return String.format(Locale.US, "%.8f", value);
-    }
-
     private static void saveToFile(Document document, String filename) throws Exception {
         TransformerFactory transformerFactory = TransformerFactory.newInstance();
         Transformer transformer = transformerFactory.newTransformer();

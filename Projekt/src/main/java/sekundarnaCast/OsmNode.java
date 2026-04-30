@@ -1,4 +1,4 @@
-package sekundarna_cast;
+package sekundarnaCast;
 
 import java.util.*;
 
