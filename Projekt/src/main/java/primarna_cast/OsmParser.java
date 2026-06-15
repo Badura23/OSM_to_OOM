@@ -125,7 +125,6 @@ public class OsmParser {
      * Parsuje OSM relacie s tagmi building=* a type=multipolygon.
      * Pre kazdu takuto relaciu zostavuje vonkajsi kruh (outer) a vnutorne kruhy
      * (inner) z predtym ulozenych way uzlov.
-     *
      * Priklad: Atriove domky — vonkajsi obrys komplexu + 6 vnutornych nadvorii
      * ktore sa na mape vykreslia ako biele diery (prechadzatelne priestory).
      */
@@ -158,7 +157,7 @@ public class OsmParser {
 
             if (outerWayIds.isEmpty()) continue;
 
-            List<OsmNode> outerRing = wayNodes.get(outerWayIds.get(0));
+            List<OsmNode> outerRing = wayNodes.get(outerWayIds.getFirst());
             if (outerRing == null || outerRing.size() < 3) continue;
 
             List<List<OsmNode>> innerRings = new ArrayList<>();

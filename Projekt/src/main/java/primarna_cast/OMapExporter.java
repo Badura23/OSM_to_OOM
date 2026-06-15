@@ -89,12 +89,10 @@ public final class OMapExporter {
 
     /**
      * Konvertuje multipolygon budovy do mapovych suradnic s pouzitim Area.subtract().
-     *
      * Java Area automaticky opravuje smer obehu (winding) pre kazdu dieru.
      * Vysledok je zoznam kruhov kde:
      *   index 0    = vonkajsi kruh (outer ring) - spravny winding
      *   index 1..N = hranice nadvorii (hole boundaries) - opacny winding
-     *
      * Toto riesenie eliminuje artefakty ktore vznikali pri pouziti HolePoint
      * flagu=8 s nekorektnym smerom obehu vnutornych kruhov.
      */
@@ -263,7 +261,7 @@ public final class OMapExporter {
 
         for (List<List<int[]>> mp : multipolygons) {
             // mp.get(0) = outer ring, mp.subList(1, ...) = inner rings
-            appendMultipolygonBuildingObject(document, objects, mp.get(0), mp.subList(1, mp.size()));
+            appendMultipolygonBuildingObject(document, objects, mp.getFirst(), mp.subList(1, mp.size()));
         }
     }
 
@@ -336,12 +334,10 @@ public final class OMapExporter {
 
     /**
      * Serializuje multipolygon s dierami do OOM textoveho formatu.
-     *
      * Kazdy kruh (vonkajsi aj vnutorny) konci flagom 50. Tento pristup:
      *   - vonkajsi kruh: flag 32 pre kazdy bod, flag 50 na uzatvoriacom bode
      *   - vnutorny kruh: flag 8 na prvom bode (HolePoint), flag 32 pre ostatok,
      *                    flag 50 na uzatvoriacom bode
-     *
      * Flag 50 na konci kazdeho kruhu zabranuje OOM nakreslit spojovaciu ciaru
      * medzi kruhmi (cize nie su diagonalne artefakty).
      * Flag 8 informuje OOM ze ide o dieru, nie o dalsiu vonkajsiu plochu.

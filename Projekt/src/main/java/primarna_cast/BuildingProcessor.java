@@ -12,10 +12,8 @@ import java.util.Map;
 
 /**
  * Kartograficke spracovanie polygonov budov v mapovych suradniciach.
- *
  * Krok 1 – Minimalna sirka budovy.
  * Krok 2 – Zlucovanie blizko stoiacich budov.
- *
  * Vnutorne prstence (dvorcky, atria) ktore vzniknu po zluceni budu
  * ignorovane — na mape ostanu biele (volne). Detekcia vnútornych
  * prstencov prebieha cez point-in-polygon test (nie cez znamienko plochy),
@@ -31,11 +29,9 @@ public final class BuildingProcessor {
 
     /**
      * Vypocita vysledny tvar budovy s dierami pomocou Area.subtract().
-     *
      * Java Area automaticky spravne nastavuje smer obehu (winding) kazdej
      * hranice. Vysledok obsahuje:
      *   index 0 = vonkajsi kruh, index 1..N = hranice nadvorii (spravny winding pre OOM).
-     *
      * Pouziva rovnake metody toArea() a extractPolygons() ako BuildingProcessor.
      */
     public static List<List<int[]>> computeHoleSubtraction(List<int[]> outerRing,
@@ -131,7 +127,7 @@ public final class BuildingProcessor {
         List<List<int[]>> result = new ArrayList<>();
         for (List<Integer> group : groups.values()) {
             if (group.size() == 1) {
-                result.add(polygons.get(group.get(0)));
+                result.add(polygons.get(group.getFirst()));
             } else {
                 // Skupinu detegujeme cez nafuknute plochy a finalny tvar
                 // tiez pocitame z nafuknutych ploch — tak sa vsetky komponenty
@@ -151,7 +147,7 @@ public final class BuildingProcessor {
     private static Area toArea(List<int[]> polygon) {
         if (polygon.isEmpty()) return new Area();
         Path2D.Double path = new Path2D.Double();
-        path.moveTo(polygon.get(0)[0], polygon.get(0)[1]);
+        path.moveTo(polygon.getFirst()[0], polygon.getFirst()[1]);
         for (int i = 1; i < polygon.size(); i++)
             path.lineTo(polygon.get(i)[0], polygon.get(i)[1]);
         path.closePath();
@@ -173,7 +169,6 @@ public final class BuildingProcessor {
     /**
      * Extrahuje IBA vonkajsie prstence z {@link Area}.
      * Vnútorné prstence (dvorcky, atria) su zahodene – na mape zostanu biele.
-     *
      * Algoritmus: najdeme prstenek s najvacsou absolutnou plochou (shoelace) –
      * ten je vzdy vonkajsi. Jeho znamienko je "vonkajsie znamienko". Zachovame
      * vsetky prstence s rovnakym znamienkom (vonkajsie hranice viacerych
