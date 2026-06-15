@@ -1,7 +1,7 @@
-package primarna_cast;
+package primarnaCast;
 
-import sekundarna_cast.Building;
-import sekundarna_cast.OsmData;
+import sekundarnaCast.Building;
+import sekundarnaCast.OsmData;
 
 import java.util.List;
 

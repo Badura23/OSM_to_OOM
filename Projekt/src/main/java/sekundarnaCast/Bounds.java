@@ -1,4 +1,4 @@
-package sekundarna_cast;
+package sekundarnaCast;
 
 public class Bounds {
     private final double minLat;
