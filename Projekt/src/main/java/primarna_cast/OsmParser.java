@@ -2,14 +2,20 @@ package primarna_cast;
 
 import org.w3c.dom.*;
 import sekundarna_cast.Building;
+import sekundarna_cast.MultipolygonBuilding;
 import sekundarna_cast.OsmData;
 import sekundarna_cast.OsmNode;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import java.io.File;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 public class OsmParser {
+
     public static OsmData parse(String filename) throws Exception {
         OsmData data = new OsmData();
 
@@ -19,7 +25,11 @@ public class OsmParser {
 
         parseBounds(doc, data);
         parseNodes(doc, data);
-        parseWaysAndBuildings(doc, data);
+
+        // wayNodes: docasna mapa way_id -> zoznam uzlov pre zostavenie relacii
+        Map<Long, List<OsmNode>> wayNodes = new HashMap<>();
+        parseWaysAndBuildings(doc, data, wayNodes);
+        parseRelations(doc, data, wayNodes);
 
         return data;
     }
@@ -55,52 +65,127 @@ public class OsmParser {
         }
     }
 
-    private static void parseWaysAndBuildings(Document doc, OsmData data) {
+    /**
+     * Parsuje vsetky ways.
+     * Ways s tagom building=* sa pridaju ako jednoduche budovy.
+     * Vsetky ways (aj bez building tagu) sa ulozia do wayNodes pre pouzitie relacii.
+     */
+    private static void parseWaysAndBuildings(Document doc, OsmData data,
+                                              Map<Long, List<OsmNode>> wayNodes) {
         NodeList ways = doc.getElementsByTagName("way");
 
         for (int i = 0; i < ways.getLength(); i++) {
             Element wayElement = (Element) ways.item(i);
+            long wayId = Long.parseLong(wayElement.getAttribute("id"));
 
-            NodeList tags = wayElement.getElementsByTagName("tag");
-            boolean isBuilding = false;
-
-            for (int j = 0; j < tags.getLength(); j++) {
-                Element tag = (Element) tags.item(j);
-                if ("building".equals(tag.getAttribute("k"))) {
-                    isBuilding = true;
-                    break;
+            NodeList nds = wayElement.getElementsByTagName("nd");
+            List<OsmNode> nodes = new ArrayList<>(nds.getLength());
+            for (int j = 0; j < nds.getLength(); j++) {
+                long nodeId = Long.parseLong(((Element) nds.item(j)).getAttribute("ref"));
+                OsmNode node = data.getNodeById(nodeId);
+                if (node != null) {
+                    nodes.add(node);
                 }
             }
 
-            if (isBuilding) {
-                createBuilding(wayElement, data);
+            if (!nodes.isEmpty()) {
+                wayNodes.put(wayId, nodes);
+            }
+
+            NodeList tags = wayElement.getElementsByTagName("tag");
+            for (int j = 0; j < tags.getLength(); j++) {
+                Element tag = (Element) tags.item(j);
+                if ("building".equals(tag.getAttribute("k"))) {
+                    createBuilding(wayElement, nodes, data);
+                    break;
+                }
             }
         }
     }
 
-    private static void createBuilding(Element wayElement, OsmData data) {
+    private static void createBuilding(Element wayElement, List<OsmNode> nodes, OsmData data) {
+        if (nodes.size() < 3) return;
+
         Building building = new Building();
 
-        // Tagy
         NodeList tags = wayElement.getElementsByTagName("tag");
         for (int j = 0; j < tags.getLength(); j++) {
             Element tag = (Element) tags.item(j);
             building.addTag(tag.getAttribute("k"), tag.getAttribute("v"));
         }
 
-        // Uzly
-        NodeList nds = wayElement.getElementsByTagName("nd");
-        for (int j = 0; j < nds.getLength(); j++) {
-            Element nd = (Element) nds.item(j);
-            long nodeId = Long.parseLong(nd.getAttribute("ref"));
-            OsmNode node = data.getNodeById(nodeId);
-            if (node != null) {
-                building.addNode(node);
+        for (OsmNode node : nodes) {
+            building.addNode(node);
+        }
+
+        data.addBuilding(building);
+    }
+
+    /**
+     * Parsuje OSM relacie s tagmi building=* a type=multipolygon.
+     * Pre kazdu takuto relaciu zostavuje vonkajsi kruh (outer) a vnutorne kruhy
+     * (inner) z predtym ulozenych way uzlov.
+     *
+     * Priklad: Atriove domky — vonkajsi obrys komplexu + 6 vnutornych nadvorii
+     * ktore sa na mape vykreslia ako biele diery (prechadzatelne priestory).
+     */
+    private static void parseRelations(Document doc, OsmData data,
+                                       Map<Long, List<OsmNode>> wayNodes) {
+        NodeList relations = doc.getElementsByTagName("relation");
+
+        for (int i = 0; i < relations.getLength(); i++) {
+            Element relElement = (Element) relations.item(i);
+
+            Map<String, String> tags = collectTags(relElement);
+            if (!tags.containsKey("building")) continue;
+            if (!"multipolygon".equals(tags.get("type"))) continue;
+
+            List<Long> outerWayIds = new ArrayList<>();
+            List<Long> innerWayIds = new ArrayList<>();
+
+            NodeList members = relElement.getElementsByTagName("member");
+            for (int j = 0; j < members.getLength(); j++) {
+                Element m = (Element) members.item(j);
+                if (!"way".equals(m.getAttribute("type"))) continue;
+                long ref = Long.parseLong(m.getAttribute("ref"));
+                String role = m.getAttribute("role");
+                if ("outer".equals(role)) {
+                    outerWayIds.add(ref);
+                } else if ("inner".equals(role)) {
+                    innerWayIds.add(ref);
+                }
             }
+
+            if (outerWayIds.isEmpty()) continue;
+
+            List<OsmNode> outerRing = wayNodes.get(outerWayIds.get(0));
+            if (outerRing == null || outerRing.size() < 3) continue;
+
+            List<List<OsmNode>> innerRings = new ArrayList<>();
+            for (long innerWayId : innerWayIds) {
+                List<OsmNode> innerRing = wayNodes.get(innerWayId);
+                if (innerRing != null && innerRing.size() >= 3) {
+                    innerRings.add(innerRing);
+                }
+            }
+
+            data.addMultipolygonBuilding(new MultipolygonBuilding(outerRing, innerRings));
+
+            System.out.printf("Multipolygon relacia %s (%s): outer=%d uzlov, %d vnutornych kruhov%n",
+                    relElement.getAttribute("id"),
+                    tags.getOrDefault("name", "?"),
+                    outerRing.size(),
+                    innerRings.size());
         }
-        // Bezpecnostna kontrola
-        if (building.getNodes().size() >= 3) {
-            data.addBuilding(building);
+    }
+
+    private static Map<String, String> collectTags(Element element) {
+        Map<String, String> result = new HashMap<>();
+        NodeList tagList = element.getElementsByTagName("tag");
+        for (int i = 0; i < tagList.getLength(); i++) {
+            Element tag = (Element) tagList.item(i);
+            result.put(tag.getAttribute("k"), tag.getAttribute("v"));
         }
+        return result;
     }
 }
