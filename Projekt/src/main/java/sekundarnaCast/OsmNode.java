@@ -1,7 +1,8 @@
-package sekundarna_cast;
+package sekundarnaCast;
 
 import java.util.*;
 
+// Jeden bod z OSM dat — zemepisna poloha + metadata tagy
 public class OsmNode {
     private long id;
     private double lat;
