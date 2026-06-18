@@ -2,6 +2,7 @@ package sekundarnaCast;
 
 import java.util.*;
 
+// Budova z OSM way s tagom building=* — obsahuje zoznam uzlov tvoriaci polygon
 public class Building {
     private final List<OsmNode> nodes = new ArrayList<>();
     private final Map<String, String> tags = new HashMap<>();

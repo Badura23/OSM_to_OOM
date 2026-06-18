@@ -1,13 +1,13 @@
-package primarna_cast;
+package primarnaCast;
 
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
-import sekundarna_cast.Building;
-import sekundarna_cast.MultipolygonBuilding;
-import sekundarna_cast.OsmData;
-import sekundarna_cast.OsmNode;
+import sekundarnaCast.Building;
+import sekundarnaCast.MultipolygonBuilding;
+import sekundarnaCast.OsmData;
+import sekundarnaCast.OsmNode;
 
 import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilder;
@@ -23,12 +23,14 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
+// Zostavuje .omap XML subor z budov nacitanych z OSM
+// Farby a symboly prebera zo sablony: src/main/java/podklady/complete map.omap
 public final class OMapExporter {
     private static final String MAP_NAMESPACE = "http://openorienteering.org/apps/mapper/xml/v2";
+    // Symbol ID 111 = budova v ISOM 2017
     private static final String BUILDING_SYMBOL_ID = "111";
 
-    private OMapExporter() {
-    }
+    private OMapExporter() {}
 
     public static void exportOnlyBuildings(OsmData osmData, String filename) throws Exception {
         List<Building> buildings = osmData.getBuildings();
@@ -36,21 +38,17 @@ public final class OMapExporter {
         CoordinateConverter coordinateConverter = CoordinateConverter.from(osmData);
         Document referenceDocument = loadReferenceDocument();
 
-        // 1. Jednoduche budovy (OSM way s tagom building=*)
-        //    → minimalna sirka + zlucovanie blizko stoiacich budov
+        // Jednoduche budovy (OSM way): minimalna sirka + zlucenie blizko stoiacich
         List<List<int[]>> rawPolygons = convertToMapCoordinates(buildings, coordinateConverter);
         List<List<int[]>> processedPolygons = BuildingProcessor.process(rawPolygons);
 
-        // 2. Multipolygon budovy (OSM relacie s tagom building=*)
-        //    → outer kruh ako telo budovy, inner kruhy ako biele diery (nadvoria)
-        //    → neprechadzaju cez BuildingProcessor (su to uz komplexne tvary)
+        // Multipolygon budovy (OSM relacie): outer = telo, inner = nadvoria
         List<List<List<int[]>>> mpCoords = convertMultipolygonsToMapCoords(mpBuildings, coordinateConverter);
 
         System.out.printf("Budovy: %d jednoduche + %d multipolygony  ->  %d OOM objektov%n",
                 buildings.size(), mpBuildings.size(),
                 processedPolygons.size() + mpCoords.size());
 
-        // 3. Zostavenie XML
         DocumentBuilderFactory factory = createDocumentBuilderFactory();
         DocumentBuilder builder = factory.newDocumentBuilder();
         Document document = builder.newDocument();
@@ -69,9 +67,7 @@ public final class OMapExporter {
         saveToFile(document, filename);
     }
 
-    // -------------------------------------------------------------------------
-    // Konverzia do mapovych suradnic
-    // -------------------------------------------------------------------------
+    // --- Konverzia suradnic ---
 
     private static List<List<int[]>> convertToMapCoordinates(List<Building> buildings,
                                                              CoordinateConverter converter) {
@@ -87,34 +83,21 @@ public final class OMapExporter {
         return result;
     }
 
-    /**
-     * Konvertuje multipolygon budovy do mapovych suradnic s pouzitim Area.subtract().
-     * Java Area automaticky opravuje smer obehu (winding) pre kazdu dieru.
-     * Vysledok je zoznam kruhov kde:
-     *   index 0    = vonkajsi kruh (outer ring) - spravny winding
-     *   index 1..N = hranice nadvorii (hole boundaries) - opacny winding
-     * Toto riesenie eliminuje artefakty ktore vznikali pri pouziti HolePoint
-     * flagu=8 s nekorektnym smerom obehu vnutornych kruhov.
-     */
+    // Area.subtract() opravi winding smer vnútorných kruhov — bez toho by sa
+    // nadvoria renderovali ako ďalsia plna budova namiesto bielej diery
     private static List<List<List<int[]>>> convertMultipolygonsToMapCoords(
             List<MultipolygonBuilding> mpBuildings, CoordinateConverter converter) {
 
         List<List<List<int[]>>> result = new ArrayList<>(mpBuildings.size());
-
         for (MultipolygonBuilding mp : mpBuildings) {
-            // Konverzia suradnic
             List<int[]> outer = convertRing(mp.getOuterRing(), converter);
             List<List<int[]>> inners = new ArrayList<>();
             for (List<OsmNode> innerNodes : mp.getInnerRings()) {
                 inners.add(convertRing(innerNodes, converter));
             }
-
-            // Area.subtract() vypocita diery so spravnym windingom
-            // (Java Area automaticky nastavi opacny smer obehu pre diery)
             List<List<int[]>> rings = BuildingProcessor.computeHoleSubtraction(outer, inners);
             result.add(rings);
         }
-
         return result;
     }
 
@@ -127,16 +110,14 @@ public final class OMapExporter {
         return ring;
     }
 
-    // -------------------------------------------------------------------------
-    // Nacitanie referencneho suboru
-    // -------------------------------------------------------------------------
+    // --- Nacitanie sablony ---
 
     private static Document loadReferenceDocument() throws Exception {
         Path projectRoot = resolveProjectRoot();
         if (projectRoot == null) {
             throw new IllegalStateException(
                     "Nepodarilo sa najst projektovy koren (adresar obsahujuci 'src'). " +
-                            "Skontroluj, ze 'complete map.omap' je na rovnakej urovni ako priecinok 'src'.");
+                            "Skontroluj, ze 'complete map.omap' je v src/main/java/podklady/");
         }
 
         Path referencePath = projectRoot.resolve("src").resolve("main").resolve("java")
@@ -151,31 +132,23 @@ public final class OMapExporter {
         return builder.parse(referencePath.toFile());
     }
 
+    // Ide nahor od .class suboru a hlada adresar obsahujuci priecinok src/
     private static Path resolveProjectRoot() {
         try {
             Path start = Path.of(OMapExporter.class
-                    .getProtectionDomain()
-                    .getCodeSource()
-                    .getLocation()
-                    .toURI()).toAbsolutePath();
+                    .getProtectionDomain().getCodeSource().getLocation().toURI()).toAbsolutePath();
 
             Path candidate = Files.isDirectory(start) ? start : start.getParent();
-
             for (int depth = 0; depth < 8 && candidate != null; depth++) {
-                if (Files.isDirectory(candidate.resolve("src"))) {
-                    return candidate;
-                }
+                if (Files.isDirectory(candidate.resolve("src"))) return candidate;
                 candidate = candidate.getParent();
             }
-        } catch (Exception ignored) {
-            // ignorovat — chyba sa odchyti v loadReferenceDocument
-        }
+        } catch (Exception ignored) {}
         return null;
     }
 
-    // -------------------------------------------------------------------------
-    // Zostavenie XML dokumentu
-    // -------------------------------------------------------------------------
+
+    // --- Zostavenie XML ---
 
     private static DocumentBuilderFactory createDocumentBuilderFactory() throws Exception {
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
@@ -200,9 +173,8 @@ public final class OMapExporter {
                                                   Document targetDocument, Element parent) {
         Element referenceBarrier = findFirstElement(referenceDocument, "barrier");
         Element barrier = appendElement(targetDocument, parent, "barrier");
-        if (referenceBarrier != null) {
-            copyAttributes(referenceBarrier, barrier);
-        } else {
+        if (referenceBarrier != null) copyAttributes(referenceBarrier, barrier);
+        else {
             barrier.setAttribute("version", "6");
             barrier.setAttribute("required", "0.6.0");
         }
@@ -212,9 +184,8 @@ public final class OMapExporter {
     private static void importReferenceElement(Document referenceDocument, Document targetDocument,
                                                Element parent, String localName) {
         Element referenceElement = findFirstElement(referenceDocument, localName);
-        if (referenceElement == null) {
+        if (referenceElement == null)
             throw new IllegalStateException("Missing element in reference OMAP: " + localName);
-        }
         Node importedNode = targetDocument.importNode(referenceElement, true);
         parent.appendChild(importedNode);
     }
@@ -232,15 +203,8 @@ public final class OMapExporter {
         }
     }
 
-    // -------------------------------------------------------------------------
-    // Generovanie XML objektov budov
-    // -------------------------------------------------------------------------
+    // --- Generovanie objektov budov ---
 
-    /**
-     * Vygeneruje XML cast {@code <parts>} obsahujucu vsetky budovy:
-     *   - jednoduche polygony zo spracovanych OSM ways
-     *   - multipolygon budovy z OSM relacii (s dierami pre nadvoria)
-     */
     private static void appendParts(Document document, Element parent,
                                     List<List<int[]>> simplePolygons,
                                     List<List<List<int[]>>> multipolygons) {
@@ -258,17 +222,12 @@ public final class OMapExporter {
         for (List<int[]> polygon : simplePolygons) {
             appendSimpleBuildingObject(document, objects, polygon);
         }
-
         for (List<List<int[]>> mp : multipolygons) {
-            // mp.get(0) = outer ring, mp.subList(1, ...) = inner rings
+            // index 0 = vonkajsi kruh, 1..N = vnutorne kruhy (nadvoria)
             appendMultipolygonBuildingObject(document, objects, mp.getFirst(), mp.subList(1, mp.size()));
         }
     }
 
-    /**
-     * Jednoduchy polygon budovy (bez dier).
-     * OOM flagy: 32 = bezny bod, 50 = posledny uzatvoriaci bod.
-     */
     private static void appendSimpleBuildingObject(Document document, Element parent,
                                                    List<int[]> polygon) {
         Element object = appendElement(document, parent, "object");
@@ -282,27 +241,11 @@ public final class OMapExporter {
         appendPatternElement(document, object);
     }
 
-    /**
-     * Multipolygon budova s dierami (nadroriami).
-     *
-     * <p>OOM format pre plochu s dierami:
-     * <ul>
-     *   <li>Vonkajsi kruh: vsetky body s flagom 32 (vrátane opakujuceho prveho bodu)</li>
-     *   <li>Kazdy vnutorny kruh: prvy bod s flagom {@code 8} (HolePoint = OOM signal
-     *       pre zaciatok diery), ostatne body s flagom 32</li>
-     *   <li>Uplne posledny bod celeho objektu ma flag 50</li>
-     * </ul>
-     *
-     * @param outerRing  vonkajsi kruh budovy
-     * @param innerRings vnutorne kruhy (nadvoria); moze byt prazdny
-     */
     private static void appendMultipolygonBuildingObject(Document document, Element parent,
                                                          List<int[]> outerRing,
                                                          List<List<int[]>> innerRings) {
         int totalPoints = outerRing.size();
-        for (List<int[]> inner : innerRings) {
-            totalPoints += inner.size();
-        }
+        for (List<int[]> inner : innerRings) totalPoints += inner.size();
 
         Element object = appendElement(document, parent, "object");
         object.setAttribute("type", "1");
@@ -315,11 +258,9 @@ public final class OMapExporter {
         appendPatternElement(document, object);
     }
 
-    // -------------------------------------------------------------------------
-    // Serializacia suradnic do OOM textoveho formatu
-    // -------------------------------------------------------------------------
+    // --- OOM format suradnic ---
 
-    /** Serializuje jednoduchy uzatvoriaci polygon: flag 32 pre kazdy bod, 50 pre posledny. */
+    // OOM flagy: 32 = bezny bod cesty, 50 = uzatvoriaci bod (koniec prstenca)
     private static String buildCoordsSimple(List<int[]> polygon) {
         StringBuilder sb = new StringBuilder();
         int last = polygon.size() - 1;
@@ -332,22 +273,14 @@ public final class OMapExporter {
         return sb.toString();
     }
 
-    /**
-     * Serializuje multipolygon s dierami do OOM textoveho formatu.
-     * Kazdy kruh (vonkajsi aj vnutorny) konci flagom 50. Tento pristup:
-     *   - vonkajsi kruh: flag 32 pre kazdy bod, flag 50 na uzatvoriacom bode
-     *   - vnutorny kruh: flag 8 na prvom bode (HolePoint), flag 32 pre ostatok,
-     *                    flag 50 na uzatvoriacom bode
-     * Flag 50 na konci kazdeho kruhu zabranuje OOM nakreslit spojovaciu ciaru
-     * medzi kruhmi (cize nie su diagonalne artefakty).
-     * Flag 8 informuje OOM ze ide o dieru, nie o dalsiu vonkajsiu plochu.
-     * Spravny winding (smer obehu) je zaisteny cez BuildingProcessor.computeHoleSubtraction().
-     */
+    // OOM flagy pre diery:
+    //   32 = bezny bod, 50 = koniec prstenca
+    //   8  = HolePoint (zaciatok diery) — OOM zatvori predchadzajuci prstenek
+    //         a zacne novy bez spojovacej ciary
     private static String buildCoordsMultipolygon(List<int[]> outerRing,
                                                   List<List<int[]>> innerRings) {
         StringBuilder sb = new StringBuilder();
 
-        // Vonkajsi kruh — flag 32 pre kazdy bod, flag 50 pre uzatvoriaci
         for (int i = 0; i < outerRing.size(); i++) {
             int flag = (i == outerRing.size() - 1) ? 50 : 32;
             sb.append(outerRing.get(i)[0]).append(' ')
@@ -355,17 +288,12 @@ public final class OMapExporter {
                     .append(flag).append(';');
         }
 
-        // Vnutorne kruhy (diery)
         for (List<int[]> ring : innerRings) {
             for (int i = 0; i < ring.size(); i++) {
                 int flag;
-                if (i == 0) {
-                    flag = 8;  // HolePoint — zaciatok diery
-                } else if (i == ring.size() - 1) {
-                    flag = 50; // Uzatvoriaci bod tohto kruhu
-                } else {
-                    flag = 32; // Bezny bod
-                }
+                if (i == 0) flag = 8;
+                else if (i == ring.size() - 1) flag = 50;
+                else flag = 32;
                 sb.append(ring.get(i)[0]).append(' ')
                         .append(ring.get(i)[1]).append(' ')
                         .append(flag).append(';');
@@ -375,14 +303,9 @@ public final class OMapExporter {
         return sb.toString();
     }
 
-    // -------------------------------------------------------------------------
-    // Pomocne metody
-    // -------------------------------------------------------------------------
-
     private static void appendPatternElement(Document document, Element object) {
         Element pattern = appendElement(document, object, "pattern");
         pattern.setAttribute("rotation", "0");
-
         Element coord = appendElement(document, pattern, "coord");
         coord.setAttribute("x", "0");
         coord.setAttribute("y", "0");

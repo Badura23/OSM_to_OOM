@@ -1,5 +1,6 @@
 package sekundarnaCast;
 
+// Geograficke hranice oblasti nacitanej z OSM suboru
 public class Bounds {
     private final double minLat;
     private final double minLon;
@@ -12,6 +13,7 @@ public class Bounds {
         this.maxLat = maxLat;
         this.maxLon = maxLon;
     }
+
     public double getMinLat() { return minLat; }
     public double getMinLon() { return minLon; }
     public double getMaxLat() { return maxLat; }

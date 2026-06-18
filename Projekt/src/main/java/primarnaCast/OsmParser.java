@@ -1,10 +1,10 @@
-package primarna_cast;
+package primarnaCast;
 
 import org.w3c.dom.*;
-import sekundarna_cast.Building;
-import sekundarna_cast.MultipolygonBuilding;
-import sekundarna_cast.OsmData;
-import sekundarna_cast.OsmNode;
+import sekundarnaCast.Building;
+import sekundarnaCast.MultipolygonBuilding;
+import sekundarnaCast.OsmData;
+import sekundarnaCast.OsmNode;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -14,6 +14,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+// Parsuje .osm XML subor a vracia OsmData s budovami a multipolygonmi
 public class OsmParser {
 
     public static OsmData parse(String filename) throws Exception {
@@ -26,7 +27,7 @@ public class OsmParser {
         parseBounds(doc, data);
         parseNodes(doc, data);
 
-        // wayNodes: docasna mapa way_id -> zoznam uzlov pre zostavenie relacii
+        // wayNodes: docasna mapa way_id -> uzly, potrebna pri skladani relacii
         Map<Long, List<OsmNode>> wayNodes = new HashMap<>();
         parseWaysAndBuildings(doc, data, wayNodes);
         parseRelations(doc, data, wayNodes);
@@ -60,16 +61,12 @@ public class OsmParser {
                 Element tag = (Element) tags.item(j);
                 node.addTag(tag.getAttribute("k"), tag.getAttribute("v"));
             }
-
             data.addNode(node);
         }
     }
 
-    /**
-     * Parsuje vsetky ways.
-     * Ways s tagom building=* sa pridaju ako jednoduche budovy.
-     * Vsetky ways (aj bez building tagu) sa ulozia do wayNodes pre pouzitie relacii.
-     */
+    // Prechadzame VSETKY ways (nielen building=*), lebo ich uzly su potrebne
+    // aj pri skladani multipolygon relacii kde samotny way nema building tag
     private static void parseWaysAndBuildings(Document doc, OsmData data,
                                               Map<Long, List<OsmNode>> wayNodes) {
         NodeList ways = doc.getElementsByTagName("way");
@@ -83,14 +80,10 @@ public class OsmParser {
             for (int j = 0; j < nds.getLength(); j++) {
                 long nodeId = Long.parseLong(((Element) nds.item(j)).getAttribute("ref"));
                 OsmNode node = data.getNodeById(nodeId);
-                if (node != null) {
-                    nodes.add(node);
-                }
+                if (node != null) nodes.add(node);
             }
 
-            if (!nodes.isEmpty()) {
-                wayNodes.put(wayId, nodes);
-            }
+            if (!nodes.isEmpty()) wayNodes.put(wayId, nodes);
 
             NodeList tags = wayElement.getElementsByTagName("tag");
             for (int j = 0; j < tags.getLength(); j++) {
@@ -107,27 +100,17 @@ public class OsmParser {
         if (nodes.size() < 3) return;
 
         Building building = new Building();
-
         NodeList tags = wayElement.getElementsByTagName("tag");
         for (int j = 0; j < tags.getLength(); j++) {
             Element tag = (Element) tags.item(j);
             building.addTag(tag.getAttribute("k"), tag.getAttribute("v"));
         }
-
-        for (OsmNode node : nodes) {
-            building.addNode(node);
-        }
-
+        for (OsmNode node : nodes) building.addNode(node);
         data.addBuilding(building);
     }
 
-    /**
-     * Parsuje OSM relacie s tagmi building=* a type=multipolygon.
-     * Pre kazdu takuto relaciu zostavuje vonkajsi kruh (outer) a vnutorne kruhy
-     * (inner) z predtym ulozenych way uzlov.
-     * Priklad: Atriove domky — vonkajsi obrys komplexu + 6 vnutornych nadvorii
-     * ktore sa na mape vykreslia ako biele diery (prechadzatelne priestory).
-     */
+    // Hlada relacie s building=* a type=multipolygon
+    // Outer way = obrys budovy, inner ways = nadvoria
     private static void parseRelations(Document doc, OsmData data,
                                        Map<Long, List<OsmNode>> wayNodes) {
         NodeList relations = doc.getElementsByTagName("relation");
@@ -148,11 +131,8 @@ public class OsmParser {
                 if (!"way".equals(m.getAttribute("type"))) continue;
                 long ref = Long.parseLong(m.getAttribute("ref"));
                 String role = m.getAttribute("role");
-                if ("outer".equals(role)) {
-                    outerWayIds.add(ref);
-                } else if ("inner".equals(role)) {
-                    innerWayIds.add(ref);
-                }
+                if ("outer".equals(role)) outerWayIds.add(ref);
+                else if ("inner".equals(role)) innerWayIds.add(ref);
             }
 
             if (outerWayIds.isEmpty()) continue;
@@ -163,9 +143,7 @@ public class OsmParser {
             List<List<OsmNode>> innerRings = new ArrayList<>();
             for (long innerWayId : innerWayIds) {
                 List<OsmNode> innerRing = wayNodes.get(innerWayId);
-                if (innerRing != null && innerRing.size() >= 3) {
-                    innerRings.add(innerRing);
-                }
+                if (innerRing != null && innerRing.size() >= 3) innerRings.add(innerRing);
             }
 
             data.addMultipolygonBuilding(new MultipolygonBuilding(outerRing, innerRings));

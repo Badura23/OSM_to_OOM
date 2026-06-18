@@ -2,6 +2,7 @@ package sekundarnaCast;
 
 import java.util.*;
 
+// Kontajner pre vsetky data nacitane z jedneho .osm suboru
 public class OsmData {
     private final Map<Long, OsmNode> nodes = new HashMap<>();
     private final List<Building> buildings = new ArrayList<>();
@@ -14,7 +15,6 @@ public class OsmData {
     public List<Building> getBuildings() { return buildings; }
     public void addBuilding(Building building) { buildings.add(building); }
 
-    /** Multipolygon budovy z OSM relacii (napr. budovy s nadroriami). */
     public List<MultipolygonBuilding> getMultipolygonBuildings() { return multipolygonBuildings; }
     public void addMultipolygonBuilding(MultipolygonBuilding b) { multipolygonBuildings.add(b); }
 

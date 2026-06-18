@@ -1,4 +1,4 @@
-package primarna_cast;
+package primarnaCast;
 
 import java.awt.BasicStroke;
 import java.awt.Shape;
@@ -10,15 +10,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Kartograficke spracovanie polygonov budov v mapovych suradniciach.
- * Krok 1 – Minimalna sirka budovy.
- * Krok 2 – Zlucovanie blizko stoiacich budov.
- * Vnutorne prstence (dvorcky, atria) ktore vzniknu po zluceni budu
- * ignorovane — na mape ostanu biele (volne). Detekcia vnútornych
- * prstencov prebieha cez point-in-polygon test (nie cez znamienko plochy),
- * takze nezavisi od smeru uzlov v zdrojovych datach OSM.
- */
+// Kartograficke spracovanie budov v mapovych suradniciach (250 mu = 1m pri 1:4000)
+// Krok 1: minimalna sirka budovy (0.5mm na mape = 500 mu)
+// Krok 2: zlucenie budov blizsich ako MIN_GAP_MU (napr. radove garaze)
 public final class BuildingProcessor {
 
     private static final double MIN_BUILDING_WIDTH_MU = 500.0;
@@ -27,13 +21,10 @@ public final class BuildingProcessor {
 
     private BuildingProcessor() {}
 
-    /**
-     * Vypocita vysledny tvar budovy s dierami pomocou Area.subtract().
-     * Java Area automaticky spravne nastavuje smer obehu (winding) kazdej
-     * hranice. Vysledok obsahuje:
-     *   index 0 = vonkajsi kruh, index 1..N = hranice nadvorii (spravny winding pre OOM).
-     * Pouziva rovnake metody toArea() a extractPolygons() ako BuildingProcessor.
-     */
+    // Vypocita plochu budovy s dierami pomocou Area.subtract().
+    // Java Area automaticky nastavi spravny winding pre kazdu dieru,
+    // co eliminuje renderingove artefakty v OOM.
+    // Vracia: index 0 = vonkajsi kruh, index 1..N = hranice nadvorii
     public static List<List<int[]>> computeHoleSubtraction(List<int[]> outerRing,
                                                            List<List<int[]>> innerRings) {
         Area area = toArea(outerRing);
@@ -48,9 +39,7 @@ public final class BuildingProcessor {
         return mergeNearbyBuildings(krok1);
     }
 
-    // =========================================================================
-    // Krok 1 – Minimalna sirka
-    // =========================================================================
+    // --- Krok 1: minimalna sirka ---
 
     private static List<List<int[]>> enforceMinimumWidth(List<List<int[]>> polygons) {
         List<List<int[]>> result = new ArrayList<>(polygons.size());
@@ -60,6 +49,8 @@ public final class BuildingProcessor {
         return result;
     }
 
+    // Ak je bounding box uzsi ako minimum, nahradi polygon obdlznikom rovnakeho stredu.
+    // Dlhsia os sa zachova, kratsia sa rozsiri — takze uzky dlhy objekt zostane dlhy.
     private static List<int[]> ensureMinimumWidth(List<int[]> polygon) {
         if (polygon.isEmpty()) return polygon;
 
@@ -88,13 +79,11 @@ public final class BuildingProcessor {
         rect.add(new int[]{r, t});
         rect.add(new int[]{r, b});
         rect.add(new int[]{l, b});
-        rect.add(new int[]{l, t});
+        rect.add(new int[]{l, t}); // uzatvoriaci bod = prvy bod
         return rect;
     }
 
-    // =========================================================================
-    // Krok 2 – Zlucovanie blizko stoiacich budov
-    // =========================================================================
+    // --- Krok 2: zlucenie blizko stoiacich budov ---
 
     private static List<List<int[]>> mergeNearbyBuildings(List<List<int[]>> polygons) {
         int n = polygons.size();
@@ -109,6 +98,7 @@ public final class BuildingProcessor {
             bufferedAreas.add(buffer(a, radius));
         }
 
+        // Union-Find: budovy ktore sa dotykaju v nafuknutej verzii patria do jednej skupiny
         int[] parent = new int[n];
         for (int i = 0; i < n; i++) parent[i] = i;
         for (int i = 0; i < n; i++) {
@@ -129,9 +119,6 @@ public final class BuildingProcessor {
             if (group.size() == 1) {
                 result.add(polygons.get(group.getFirst()));
             } else {
-                // Skupinu detegujeme cez nafuknute plochy a finalny tvar
-                // tiez pocitame z nafuknutych ploch — tak sa vsetky komponenty
-                // spoja do jedneho polygonu a ziadne bloky sa nestratia.
                 Area merged = new Area();
                 for (int idx : group) merged.add(bufferedAreas.get(idx));
                 result.addAll(extractOuterPolygons(merged));
@@ -140,9 +127,7 @@ public final class BuildingProcessor {
         return result;
     }
 
-    // =========================================================================
-    // Geometricke pomocne metody
-    // =========================================================================
+    // --- Geometricke pomocne metody ---
 
     private static Area toArea(List<int[]> polygon) {
         if (polygon.isEmpty()) return new Area();
@@ -166,20 +151,13 @@ public final class BuildingProcessor {
         return result;
     }
 
-    /**
-     * Extrahuje IBA vonkajsie prstence z {@link Area}.
-     * Vnútorné prstence (dvorcky, atria) su zahodene – na mape zostanu biele.
-     * Algoritmus: najdeme prstenek s najvacsou absolutnou plochou (shoelace) –
-     * ten je vzdy vonkajsi. Jeho znamienko je "vonkajsie znamienko". Zachovame
-     * vsetky prstence s rovnakym znamienkom (vonkajsie hranice viacerych
-     * oddelených komponentov), zahodime prstence s opacnym (diery/dvorcky).
-     * Prístup nezavisi od smeru uzlov v OSM datach.
-     */
+    // Z Area extrahuje iba vonkajsie prstence (zahodí nadvoria/diery).
+    // Vonkajsi prstenec ma vzdy najvacsiu absolutnu plochu — jeho znamienko
+    // shoelace formuly pouzijeme ako referenciu pre ostatne vonkajsie prstence.
     private static List<List<int[]>> extractOuterPolygons(Area area) {
         List<List<int[]>> allRings = extractAllRings(area);
         if (allRings.size() <= 1) return allRings;
 
-        // Najdi dominantne znamienko = znamienko prstenca s najvacsou plochou
         double maxAbsArea = 0;
         double dominantSign = 0;
         for (List<int[]> ring : allRings) {
@@ -192,19 +170,12 @@ public final class BuildingProcessor {
 
         List<List<int[]>> outer = new ArrayList<>();
         for (List<int[]> ring : allRings) {
-            if (Math.signum(computeSignedArea(ring)) == dominantSign) {
-                outer.add(ring);
-            }
+            if (Math.signum(computeSignedArea(ring)) == dominantSign) outer.add(ring);
         }
         return outer.isEmpty() ? allRings : outer;
     }
 
-    /**
-     * Znamienkova plocha prstenca (shoelace formula).
-     * Vonkajsi a vnutorny prstenek maju opacne znamienka –
-     * konkretne znamienko zavisi od smeru uzlov a suradnicoveho systemu,
-     * ale je konzistentne pre vsetky prstence z jednej {@link Area}.
-     */
+    // Shoelace formula — vonkajsi a vnutorny prstenec maju opacne znamienka
     private static double computeSignedArea(List<int[]> ring) {
         double area = 0;
         int n = ring.size();
@@ -215,7 +186,6 @@ public final class BuildingProcessor {
         return area / 2.0;
     }
 
-    /** Extrahuje vsetky prstence z Area (bez filtrovania). */
     private static List<List<int[]>> extractAllRings(Area area) {
         List<List<int[]>> rings = new ArrayList<>();
         List<int[]> current = new ArrayList<>();
@@ -255,13 +225,9 @@ public final class BuildingProcessor {
     }
 
     private static void closeAndAdd(List<int[]> ring, int[] start, List<List<int[]>> out) {
-        ring.add(new int[]{start[0], start[1]});
+        ring.add(new int[]{start[0], start[1]}); // uzatvoriaci bod = kopie prveho bodu
         if (ring.size() >= 4) out.add(ring);
     }
-
-    // =========================================================================
-    // Union-Find
-    // =========================================================================
 
     private static int iRound(double v) { return (int) Math.round(v); }
 
