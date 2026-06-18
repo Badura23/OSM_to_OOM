@@ -147,12 +147,6 @@ public class OsmParser {
             }
 
             data.addMultipolygonBuilding(new MultipolygonBuilding(outerRing, innerRings));
-
-            System.out.printf("Multipolygon relacia %s (%s): outer=%d uzlov, %d vnutornych kruhov%n",
-                    relElement.getAttribute("id"),
-                    tags.getOrDefault("name", "?"),
-                    outerRing.size(),
-                    innerRings.size());
         }
     }
 
